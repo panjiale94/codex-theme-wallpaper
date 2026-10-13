@@ -16,6 +16,7 @@ docs/
 resources/
 work/*.png
 outputs/**/*.zip
+outputs/**/SHA256SUMS.txt
 outputs/**/实际效果-*.png
 
 # 避免把环境凭据和用户设置提交到公开仓库。
