@@ -24,7 +24,7 @@ internal static class StartupIntegration
         }
         string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CodexDreamSkin");
         Directory.CreateDirectory(directory);
-        string marker = Path.Combine(directory, "shortcuts-v5.txt");
+        string marker = Path.Combine(directory, "shortcuts-v6.txt");
         if (settings.Enabled && File.Exists(marker) && await File.ReadAllTextAsync(marker) == Worker) return;
         string Quote(string value) => "'" + value.Replace("'", "''") + "'";
         // 使用一次性的隐藏 PowerShell 创建快捷方式；守护进程无需常驻 COM/WPF。
@@ -40,7 +40,7 @@ $owned=@((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Codex（动态皮
 $roots=@([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('Programs'),(Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar'));
 foreach($root in $roots){if(!(Test-Path -LiteralPath $root)){continue};foreach($file in Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue){
 if($owned -contains $file.FullName){continue};$link=$shell.CreateShortcut($file.FullName);
-if(($link.TargetPath -match 'OpenAI\.Codex_' -and $link.TargetPath -match 'ChatGPT\.exe$') -or ($file.BaseName -eq 'Codex' -and $link.TargetPath -eq '')){
+if(($link.TargetPath -match 'OpenAI\.Codex_' -and $link.TargetPath -match 'ChatGPT\.exe$') -or ($file.BaseName -eq 'Codex' -and $link.TargetPath -eq '') -or (($entries | Where-Object Path -eq $file.FullName) -and $link.TargetPath -match 'CodexDreamSkin(\.Worker)?\.exe$')){
 if(!($entries | Where-Object Path -eq $file.FullName)){$backup=Join-Path $directory ([Guid]::NewGuid().ToString('N')+'.lnk');[IO.File]::WriteAllBytes($backup,[IO.File]::ReadAllBytes($file.FullName));$entries+= [pscustomobject]@{Path=$file.FullName;Backup=$backup}};
 $link.TargetPath=$worker;$link.Arguments='--launch';$link.WorkingDirectory=Split-Path -Parent $worker;$link.Save()}}
 };

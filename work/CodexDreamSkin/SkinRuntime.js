@@ -1,7 +1,7 @@
 (function () {
   if (location.protocol !== 'app:' || location.search.includes('avatar-overlay')) return;
   const key = '__codexDreamSkin';
-  if (window[key]?.version === 5) return;
+  if (window[key]?.version === 6) return;
   if (window[key]) window[key].restore();
   let originalTheme;
   let observer;
@@ -102,7 +102,7 @@ html[data-dream-skin] [class*='_ComposerLayoutRoot_'] { background:rgba(15,22,34
     if (!host) {
       host=document.createElement('div'); host.id='codex-dream-background'; document.body.prepend(host);
     }
-    host.dataset.version='5';
+    host.dataset.version='6';
     if (host.dataset.source !== next.mediaId || host.dataset.mediaUrl !== next.source) {
       stopEffects?.();stopEffects=null;effectKey=null;
       mediaAbort?.abort(); mediaAbort=new AbortController();
@@ -154,5 +154,5 @@ html[data-dream-skin] [class*='_ComposerLayoutRoot_'] { background:rgba(15,22,34
     delete window[key];
     return {restored:true};
   }
-  window[key]={apply,restore,version:5};
+  window[key]={apply,restore,version:6};
 })();

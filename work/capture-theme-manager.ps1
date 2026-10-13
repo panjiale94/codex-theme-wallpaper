@@ -10,14 +10,15 @@ public static class CaptureSkinWindow {
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr dc, uint flags);
 }
 '@
-$skinArguments = if($ProfileDirectory) { '--profile-dir="'+$ProfileDirectory+'"' } else { '' }
-$skinManager = Start-Process -FilePath $ExecutablePath -ArgumentList $skinArguments -WindowStyle Hidden -PassThru
+$startOptions = @{FilePath=$ExecutablePath;WindowStyle='Hidden';PassThru=$true}
+if($ProfileDirectory){$startOptions.ArgumentList='--profile-dir="'+$ProfileDirectory+'"'}
+$skinManager = Start-Process @startOptions
 try {
   for($attempt=0;$attempt -lt 35;$attempt++) {
     Start-Sleep -Milliseconds 200;$skinManager.Refresh()
     if($skinManager.MainWindowHandle -ne 0){break}
   }
-  Start-Sleep -Seconds 1
+  Start-Sleep -Seconds 5
   $rect=[CaptureSkinWindow+Rect]::new()
   [CaptureSkinWindow]::GetWindowRect($skinManager.MainWindowHandle,[ref]$rect) | Out-Null
   $bitmap=[System.Drawing.Bitmap]::new($rect.Right-$rect.Left,$rect.Bottom-$rect.Top)
@@ -30,6 +31,8 @@ try {
   Write-Output $OutputPath
 }
 finally{
-  $skinManager.CloseMainWindow() | Out-Null
-  $skinManager.WaitForExit(5000) | Out-Null
+  if($skinManager -and !$skinManager.HasExited){
+    $skinManager.CloseMainWindow() | Out-Null
+    $skinManager.WaitForExit(5000) | Out-Null
+  }
 }

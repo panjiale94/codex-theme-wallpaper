@@ -47,7 +47,7 @@ internal sealed class WorkerClient(string? profileOverride) : IAsyncDisposable
                 if (!launched || attempt % 10 == 0)
                 {
                     string executable = Path.Combine(AppContext.BaseDirectory, "CodexDreamSkin.Worker.exe");
-                    if (!File.Exists(executable)) throw new FileNotFoundException("缺少轻量守护程序，请使用完整 v5 软件包。", executable);
+                    if (!File.Exists(executable)) throw new FileNotFoundException("缺少轻量守护程序，请使用完整 v6 软件包。", executable);
                     var start = new ProcessStartInfo(executable)
                     { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
                     start.ArgumentList.Add("--background");
@@ -73,7 +73,7 @@ internal sealed class WorkerClient(string? profileOverride) : IAsyncDisposable
         if (!versionChecked)
         {
             var version = await RequestAsync(new WorkerRequest("version"));
-            if (!version.Success || version.Version < 5)
+            if (!version.Success || version.Version < 6)
             {
                 // 新版本主动接管旧守护，避免主题库升级后仍被旧资源覆盖。
                 var stopped = await RequestAsync(new WorkerRequest("stop"));
@@ -84,14 +84,15 @@ internal sealed class WorkerClient(string? profileOverride) : IAsyncDisposable
                     if (await probe.IsAvailableAsync() || serverPid == 0) throw new InvalidOperationException(stopped.Message);
                     using var legacy = Process.GetProcessById((int)serverPid);
                     string path = legacy.MainModule?.FileName ?? "";
-                    if (Path.GetFileName(path) != "CodexDreamSkin.exe" || FileVersionInfo.GetVersionInfo(path).FileMajorPart > 4)
+                    if ((Path.GetFileName(path) != "CodexDreamSkin.exe" && Path.GetFileName(path) != "CodexDreamSkin.Worker.exe") ||
+                        FileVersionInfo.GetVersionInfo(path).FileMajorPart >= 6)
                         throw new InvalidOperationException("旧守护无法安全接管，请关闭旧版主题工具后重试。");
                     legacy.Kill(); await legacy.WaitForExitAsync();
                 }
                 await Task.Delay(500);
                 version = await RequestAsync(new WorkerRequest("version"));
             }
-            if (!version.Success || version.Version != 5)
+            if (!version.Success || version.Version != 6)
                 throw new InvalidOperationException("皮肤守护版本不匹配，请使用最新版本的设置工具。");
             versionChecked = true;
         }

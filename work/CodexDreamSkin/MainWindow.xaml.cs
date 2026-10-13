@@ -184,10 +184,10 @@ public partial class MainWindow : Window
             if (!settings.Enabled) { settings.Enabled = true; SaveSettings(); }
             UpdateState();
             StatusText.Text = windows > 0 ? $"已应用“{MediaName.Text}”（{windows} 个窗口）。轻量后台维持效果，可以关闭设置窗口。" :
-                "自动恢复已就绪。请从“Codex（动态皮肤）”快捷方式打开 Codex；设置窗口可以关闭。";
+                "自动恢复已就绪。正常打开 Codex 即可加载主题；设置窗口可以关闭。";
         }
         catch (Exception ex) { settings.Enabled = settingsStore.Load().Enabled; UpdateState(); StatusText.Text = ex.Message; }
-        finally { SetBusy(false); }
+        finally { FinishOperation(); }
     }
 
     private async void Stop_Click(object sender, RoutedEventArgs e)
@@ -200,7 +200,13 @@ public partial class MainWindow : Window
             StatusText.Text = "效果已关闭，Codex 已恢复原来的界面主题。以后打开工具也不会自动启用。";
         }
         catch (Exception ex) { StatusText.Text = "关闭失败：" + ex.Message; }
-        finally { SetBusy(false); }
+        finally { FinishOperation(); }
+    }
+
+    private void FinishOperation()
+    {
+        SetBusy(false);
+        if (closing) { mayClose = true; Close(); }
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
@@ -208,9 +214,14 @@ public partial class MainWindow : Window
         if (mayClose) return;
         if (closing) return;
         closing = true; debounce.Stop();
+        if (busy)
+        {
+            // 隐藏窗口后完成后台交接，避免在旧守护退出、新守护未启动时中断升级。
+            e.Cancel = true; Hide(); return;
+        }
         try
         {
-            // 前台没有 CDP 连接；无需等待后台操作，可以立即关闭窗口。
+            // 没有未完成的后台操作时立即关闭，效果保留。
             if (!busy) SaveSettings();
         }
         catch (Exception) { /* 页面皮肤由 Codex 保留；关闭管理器不撤销它。 */ }

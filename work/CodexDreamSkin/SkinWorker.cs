@@ -12,6 +12,7 @@ internal sealed class SkinWorker(string? profileOverride)
     private readonly SemaphoreSlim operationGate = new(1, 1);
     private readonly CancellationTokenSource lifetime = new();
     private readonly MediaStore mediaStore = new();
+    private readonly NativeLaunchMonitor launchMonitor = new(profileOverride);
     private readonly SemaphoreSlim wake = new(0, 1);
     private FileSystemWatcher? watcher;
     private bool connected;
@@ -61,7 +62,7 @@ internal sealed class SkinWorker(string? profileOverride)
                         finally { operationGate.Release(); }
                     }
                     else if (request.Command == "version")
-                        response = new WorkerResponse(true, 0, "轻量自动恢复 v5", 5);
+                        response = new WorkerResponse(true, 0, "普通启动自动恢复 v6", 6);
                     else if (request.Command == "apply")
                         response = new WorkerResponse(true, await ApplyAsync(request.AllowLaunch, true), "皮肤已应用。");
                     else response = new WorkerResponse(false, 0, "不支持的后台命令。");
@@ -92,7 +93,7 @@ internal sealed class SkinWorker(string? profileOverride)
     {
         while (!lifetime.IsCancellationRequested)
         {
-            await wake.WaitAsync(TimeSpan.FromSeconds(connected ? 3 : 8), lifetime.Token);
+            await wake.WaitAsync(TimeSpan.FromSeconds(connected ? 3 : 1), lifetime.Token);
             if (!store.Load().Enabled) continue;
             try { await ApplyAsync(false, false); lastPollError = null; }
             catch (Exception ex)
@@ -122,7 +123,14 @@ internal sealed class SkinWorker(string? profileOverride)
                     // 仅在客户端退出时释放上一轮调试连接的临时分配，不周期性裁剪工作集。
                     GC.Collect(GC.MaxGeneration, GCCollectionMode.Optimized, false, false);
                 }
+                await launchMonitor.RecoverAsync();
                 return 0;
+            }
+            if (allowLaunch && !await controller.IsAvailableAsync())
+            {
+                if (await launchMonitor.RecoverAsync())
+                    for (int attempt = 0; attempt < 40 && !await controller.IsAvailableAsync(); attempt++)
+                        await Task.Delay(350);
             }
             LoadMedia(settings);
             var config = new SkinConfig(cachedKind, cachedSource, cachedMediaId!, settings.Panel / 100d,
@@ -158,7 +166,7 @@ internal sealed class SkinWorker(string? profileOverride)
         else
         {
             string path = Path.Combine(AppContext.BaseDirectory, "Themes", preset.File);
-            if (!File.Exists(path)) throw new FileNotFoundException("缺少主题素材，请使用完整 v5 软件包。", path);
+            if (!File.Exists(path)) throw new FileNotFoundException("缺少主题素材，请使用完整 v6 软件包。", path);
             cachedSource = mediaStore.SetMedia(path, "image/png");
         }
         cachedMediaId = preset.Id;

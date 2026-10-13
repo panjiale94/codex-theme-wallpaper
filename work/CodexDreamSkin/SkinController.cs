@@ -63,7 +63,7 @@ internal sealed class SkinController : IAsyncDisposable
             if (targets.Count == 0 && allowLaunch)
             {
                 if (!isAlternateProfile && IsCodexRunning())
-                    throw new InvalidOperationException("当前 Codex 尚未开启主题连接。请从 Codex“文件 → 退出”彻底退出，再通过桌面“Codex（动态皮肤）”入口打开。聊天会保留。");
+                    throw new InvalidOperationException("自动恢复已启用。当前 Codex 已经运行，为保护正在进行的工作不会强制重启。下次从“文件 → 退出”后正常打开 Codex，将自动加载主题。");
                 await LaunchCodexAsync();
                 for (int attempt = 0; attempt < 40 && targets.Count == 0; attempt++)
                 {

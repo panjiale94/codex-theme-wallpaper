@@ -1,7 +1,7 @@
 <Window x:Class="CodexDreamSkin.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Codex 动态皮肤 · 自动恢复与轻量后台 v5" Width="1050" Height="835" MinWidth="940" MinHeight="780"
+        Title="Codex 动态皮肤 · 普通启动自动恢复 v6" Width="1050" Height="835" MinWidth="940" MinHeight="780"
         WindowStartupLocation="CenterScreen" Background="#090F1C" Foreground="#E8EEF8">
     <Window.Resources>
         <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
@@ -50,7 +50,7 @@
                     <Button Content="导入图片 / 动图 / 视频" Click="ChooseMedia_Click" Margin="0,0,0,8"/>
                     <Button Content="导入当前桌面视频" Click="ImportDesktop_Click" Margin="0,0,0,18"/>
                     <Border Background="#192941" CornerRadius="10" Padding="12" Margin="0,0,0,18">
-                        <TextBlock Text="启用后自动创建“Codex（动态皮肤）”启动入口。用该入口重开可恢复；关闭效果会撤销自动恢复入口。" FontSize="12" Foreground="#B4CBE0"/>
+                        <TextBlock Text="启用后正常打开 Codex 即可恢复主题。普通启动可能快速重开一次；关闭效果会撤销自动恢复。" FontSize="12" Foreground="#B4CBE0"/>
                     </Border>
                     <CheckBox x:Name="AutoStartCheckBox" Content="Windows 登录后自动恢复" Foreground="#B4CBE0" Margin="0,0,0,16" IsChecked="True" Click="AutoStart_Click"/>
                     <Button x:Name="StartButton" Content="应用主题 / 启动 Codex" Click="Start_Click" Background="#AD633C" Margin="0,0,0,9"/>
@@ -85,7 +85,7 @@
             </Grid>
         </Grid>
         <Border Grid.Row="4" Background="#112137" CornerRadius="10" Padding="14,11">
-            <TextBlock x:Name="StatusText" Text="首次使用请彻底退出 Codex，再点击“应用主题 / 启动 Codex”。" Foreground="#B4D3E5" FontSize="12"/>
+            <TextBlock x:Name="StatusText" Text="选择主题并应用。已运行的 Codex 保留当前工作，下次正常打开时自动恢复。" Foreground="#B4D3E5" FontSize="12"/>
         </Border>
     </Grid>
 </Window>

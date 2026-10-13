@@ -6,6 +6,10 @@ work/cdp-probe-profile/
 work/v5-test-profile/
 work/v5-*.json
 work/v5-*.txt
+work/v6-test-profile/
+work/v6-*.json
+work/v6-*.txt
+outputs/CodexDreamSkin-v6/Themes/
 outputs/CodexDreamSkin-v5/Themes/
 work/preview-frames/
 work/probe-pid.txt

@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>CodexDreamSkin.Worker</AssemblyName>
-    <Version>5.0.0</Version>
+    <Version>6.0.0</Version>
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
   </PropertyGroup>
@@ -19,6 +19,7 @@
     <Compile Include="..\CodexDreamSkin\WorkerClient.cs" Link="WorkerClient.cs" />
     <Compile Include="..\CodexDreamSkin\MediaStore.cs" Link="MediaStore.cs" />
     <Compile Include="..\CodexDreamSkin\StartupIntegration.cs" Link="StartupIntegration.cs" />
+    <Compile Include="..\CodexDreamSkin\NativeLaunchMonitor.cs" Link="NativeLaunchMonitor.cs" />
     <EmbeddedResource Include="..\CodexDreamSkin\SkinRuntime.js" LogicalName="CodexDreamSkin.SkinRuntime.js" />
     <EmbeddedResource Include="..\CodexDreamSkin\EffectRuntime.js" LogicalName="CodexDreamSkin.EffectRuntime.js" />
     <None Include="..\CodexDreamSkin\Assets\*.png" Link="Themes\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
