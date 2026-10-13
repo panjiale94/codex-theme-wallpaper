@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>CodexDreamSkin</AssemblyName>
+    <Version>4.0.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\*.png" />
+    <EmbeddedResource Include="SkinRuntime.js" />
+    <EmbeddedResource Include="EffectRuntime.js" />
+  </ItemGroup>
+</Project>

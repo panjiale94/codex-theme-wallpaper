@@ -1,0 +1,29 @@
+# 本地构建与测试客户端缓存
+**/bin/
+**/obj/
+**/node_modules/
+work/cdp-probe-profile/
+work/preview-frames/
+work/probe-pid.txt
+work/publish/
+archive/
+tools/ffmpeg/ffmpeg.exe
+outputs/**/*.exe
+outputs/**/*.pdb
+
+# 本机记录、参考附件和聊天界面截图仅在本地保存。
+docs/
+resources/
+work/*.png
+outputs/**/*.zip
+outputs/**/实际效果-*.png
+
+# 避免把环境凭据和用户设置提交到公开仓库。
+.env
+.env.*
+*.log
+*.tmp
+*.user
+*.suo
+settings-*.json
+injection-*.json

@@ -1,0 +1,1 @@
+JSON.stringify({skin:typeof window.__codexDreamSkin,effects:typeof window.__codexDreamEffects,url:location.href,ready:document.readyState,root:!!document.getElementById('root'),body:!!document.body,frameOrigin:origin})

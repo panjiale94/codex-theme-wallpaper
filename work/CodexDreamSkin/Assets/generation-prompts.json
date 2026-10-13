@@ -1,0 +1,26 @@
+{
+  "generator": "built-in image_gen",
+  "reference": "user's local Shiranui desktop wallpaper",
+  "themes": [
+    {
+      "id": "shiranui-fire",
+      "name": "不知火 · 离岛焰舞",
+      "prompt": "Use case: stylized-concept. Asset: immersive 16:9 anime wallpaper for a translucent coding app. Reference image is a character/design/mood reference only, not an edit target. Create a NEW fan-art wallpaper of Shiranui / 不知火 from Onmyoji / 阴阳师, accurately retaining the reference character's long silver-white hair, orange-red eyes, delicate red/orange hair ornaments, white kimono with red and golden trim, ornate navy/red folding fan. Scene: distant island shrine over a dark teal sea at night, red paper lanterns and a few elegant glowing fire-butterflies. Character framed on the RIGHT third in a graceful dance pose, flowing sleeves and hair extending into the scene. Center and left are lower-detail deep teal negative space for readable chat text. Highly polished cinematic 2D anime illustration, radiant warm rim light, rich but controlled depth, no other characters. No clock, numerals, text, logos, watermark, UI. Landscape widescreen 16:9."
+    },
+    {
+      "id": "shiranui-moon",
+      "name": "不知火 · 月海流萤",
+      "prompt": "Use case: stylized-concept. Asset: immersive 16:9 anime wallpaper behind a coding application. Use the reference only for the identity and costume of Shiranui / 不知火 from Onmyoji / 阴阳师. Create a new fan-art composition: Shiranui with long silver-white hair, orange-red eyes, red/gold hair ornaments, elegant white/red kimono and folding fan, on the RIGHT third, beneath an immense pearl moon over an indigo ocean. Cool cyan bioluminescent butterflies and soft silver sea mist, delicate moonlight on flowing hair and fan. Sophisticated luminous blue/silver night palette, cinematic painterly anime detail, tranquil and immersive. Darker low-detail center/left reserved for readable chat UI, subtle shrine silhouette on distant shore. No other characters, no clock, numbers, text, watermark, logos or UI. Landscape 16:9."
+    },
+    {
+      "id": "shiranui-sakura",
+      "name": "不知火 · 樱雨花见",
+      "prompt": "Use case: stylized-concept. Asset: 16:9 immersive anime wallpaper behind translucent coding UI. Reference image supplies the design of Shiranui / 不知火 from Onmyoji / 阴阳师; make a new fan-art scene. Long silver-white hair, amber-red eyes, red/golden hair ornaments, flowing ivory kimono edged in red and gold, holding her decorated folding fan, gracefully standing on the RIGHT third. A lakeside Japanese shrine at blue-violet dusk with softly lit red lanterns and branches of pink cherry blossoms; a few petals drift past, reflections and layered fog create spacious depth. Dreamy rose, plum and warm gold palette, premium cinematic 2D anime illustration. Keep left and center dim and low-detail for chat readability. No extra characters. No text, clock, numerals, watermark, logos or UI. Widescreen landscape 16:9."
+    },
+    {
+      "id": "shiranui-crimson",
+      "name": "不知火 · 赤月蝶烬",
+      "prompt": "Use case: stylized-concept. Asset: cinematic 16:9 anime wallpaper for an immersive coding-app theme. Use the reference only to faithfully retain Shiranui / 不知火 from Onmyoji / 阴阳师: silver-white flowing hair, luminous red-amber eyes, delicate orange/red hair ornaments, white/red/gold kimono and ornate dark folding fan. New fan-art composition, character on RIGHT third in a dignified dance pose, backed by a large muted crimson moon, black volcanic coastline and a dark red sky with golden butterfly fire embers. Striking charcoal, muted crimson and ember-gold palette, elegant ethereal spirit atmosphere, refined detailed 2D anime rendering and cinematic depth. Left and central area dark, spacious, low-detail for legible coding chat, avoid bright flames across center. No other characters, no clock or text, no logos, no watermark, no UI. Landscape 16:9."
+    }
+  ]
+}
