@@ -15,7 +15,6 @@ public partial class MainWindow : Window
     private readonly ThemeSettingsStore settingsStore;
     private readonly ThemeSettings settings;
     private readonly List<ThemePreset> presets;
-    private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer debounce = new() { Interval = TimeSpan.FromMilliseconds(450) };
     private bool sourceReady;
     private bool initializing = true;
@@ -32,6 +31,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         presets = ThemeCatalog.Create(); ThemeList.ItemsSource = presets;
         OpacitySlider.Value = settings.Panel; MotionSlider.Value = settings.Motion;
+        AutoStartCheckBox.IsChecked = settings.AutoStart;
         var preset = presets.FirstOrDefault(x => x.Id == settings.PresetId) ?? presets[0];
         if (settings.PresetId == "custom")
         {
@@ -41,7 +41,6 @@ public partial class MainWindow : Window
         }
         else { ThemeList.SelectedItem = preset; PreparePreset(preset); }
         initializing = false; UpdateState();
-        timer.Tick += async (_, _) => { if (settings.Enabled && !busy) await ApplySkinAsync(false); };
         debounce.Tick += async (_, _) =>
         {
             debounce.Stop();
@@ -151,6 +150,7 @@ public partial class MainWindow : Window
     private void SaveSettings()
     {
         settings.Panel = OpacitySlider.Value; settings.Motion = MotionSlider.Value;
+        settings.AutoStart = AutoStartCheckBox.IsChecked == true;
         settingsStore.Save(settings); UpdateState();
     }
 
@@ -161,10 +161,17 @@ public partial class MainWindow : Window
 
     private void BoostMotion_Click(object sender, RoutedEventArgs e) => MotionSlider.Value = 100;
 
+    private async void AutoStart_Click(object sender, RoutedEventArgs e)
+    {
+        SaveSettings();
+        if (settings.Enabled) await ApplySkinAsync(false);
+    }
+
     private void SetBusy(bool value)
     {
         busy = value; StartButton.IsEnabled = !value; StopButton.IsEnabled = !value;
         ThemeList.IsEnabled = !value; OpacitySlider.IsEnabled = !value; MotionSlider.IsEnabled = !value;
+        AutoStartCheckBox.IsEnabled = !value;
     }
 
     private async Task ApplySkinAsync(bool allowLaunch)
@@ -175,17 +182,18 @@ public partial class MainWindow : Window
         {
             int windows = await controller.ApplyAsync(allowLaunch);
             if (!settings.Enabled) { settings.Enabled = true; SaveSettings(); }
-            timer.Start(); UpdateState();
-            StatusText.Text = $"已应用“{MediaName.Text}”（{windows} 个窗口）。可以关闭此工具，效果会继续播放。";
+            UpdateState();
+            StatusText.Text = windows > 0 ? $"已应用“{MediaName.Text}”（{windows} 个窗口）。轻量后台维持效果，可以关闭设置窗口。" :
+                "自动恢复已就绪。请从“Codex（动态皮肤）”快捷方式打开 Codex；设置窗口可以关闭。";
         }
-        catch (Exception ex) { StatusText.Text = ex.Message; }
+        catch (Exception ex) { settings.Enabled = settingsStore.Load().Enabled; UpdateState(); StatusText.Text = ex.Message; }
         finally { SetBusy(false); }
     }
 
     private async void Stop_Click(object sender, RoutedEventArgs e)
     {
         if (busy) return;
-        SetBusy(true); timer.Stop(); debounce.Stop();
+        SetBusy(true); debounce.Stop();
         try
         {
             await controller.RestoreAsync(); settings.Enabled = false; SaveSettings();
@@ -199,7 +207,7 @@ public partial class MainWindow : Window
     {
         if (mayClose) return;
         if (closing) return;
-        closing = true; timer.Stop(); debounce.Stop();
+        closing = true; debounce.Stop();
         try
         {
             // 前台没有 CDP 连接；无需等待后台操作，可以立即关闭窗口。

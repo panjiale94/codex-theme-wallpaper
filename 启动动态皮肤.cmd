@@ -1,2 +1,2 @@
 @echo off
-start "" "%~dp0outputs\CodexDreamSkin-v4\CodexDreamSkin.exe"
+start "" "%~dp0outputs\CodexDreamSkin-v5\CodexDreamSkin.exe"

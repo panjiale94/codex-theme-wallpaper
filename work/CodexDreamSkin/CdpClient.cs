@@ -14,6 +14,7 @@ internal sealed class CdpClient : IAsyncDisposable
     private Task? receiver;
     private int nextId;
     internal bool Connected => socket.State == WebSocketState.Open;
+    internal event Action<JsonElement>? BindingCalled;
 
     internal static async Task<CdpClient> ConnectAsync(string address, int expectedPort)
     {
@@ -69,7 +70,12 @@ internal sealed class CdpClient : IAsyncDisposable
                 } while (!part.EndOfMessage);
                 using var json = JsonDocument.Parse(message.ToArray());
                 var root = json.RootElement;
-                if (!root.TryGetProperty("id", out var id) || !pending.TryRemove(id.GetInt32(), out var completion)) continue;
+                if (!root.TryGetProperty("id", out var id) || !pending.TryRemove(id.GetInt32(), out var completion))
+                {
+                    if (root.TryGetProperty("method", out var method) && method.GetString() == "Runtime.bindingCalled")
+                        BindingCalled?.Invoke(root.GetProperty("params").Clone());
+                    continue;
+                }
                 if (root.TryGetProperty("error", out var error)) completion.TrySetException(new InvalidOperationException(error.ToString()));
                 else completion.TrySetResult(root.GetProperty("result").Clone());
             }

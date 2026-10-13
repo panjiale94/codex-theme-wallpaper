@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using System.Buffers;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Win32;
 
 namespace CodexDreamSkin;
 
@@ -20,8 +22,10 @@ internal sealed class SkinController : IAsyncDisposable
     private readonly string runtime;
     private readonly bool isAlternateProfile;
     private readonly string journalPath;
+    private readonly string journalRegistryPath;
     private bool recovered;
     private int port;
+    internal MediaStore? MediaSource { get; set; }
     private sealed record Target(string id, string type, string url, string webSocketDebuggerUrl);
     private sealed record JournalEntry(string TargetId, string Address, int Port, string ScriptId);
     private sealed class Session(CdpClient client, string address, int port)
@@ -31,6 +35,8 @@ internal sealed class SkinController : IAsyncDisposable
         internal int Port { get; } = port;
         internal string? ScriptId { get; set; }
         internal string? Revision { get; set; }
+        internal bool BindingReady { get; set; }
+        internal readonly SemaphoreSlim TransferGate = new(1, 1);
     }
 
     internal SkinController(string? profileOverride = null)
@@ -38,6 +44,7 @@ internal sealed class SkinController : IAsyncDisposable
         isAlternateProfile = profileOverride is not null;
         profileDirectory = WorkerIdentity.ProfileDirectory(profileOverride);
         string profileKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(profileDirectory.ToUpperInvariant())))[..16];
+        journalRegistryPath = @"Software\CodexDreamSkin\Profiles\" + profileKey;
         journalPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "CodexDreamSkin", $"injection-{profileKey}.json");
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("CodexDreamSkin.SkinRuntime.js")!;
@@ -56,7 +63,7 @@ internal sealed class SkinController : IAsyncDisposable
             if (targets.Count == 0 && allowLaunch)
             {
                 if (!isAlternateProfile && IsCodexRunning())
-                    throw new InvalidOperationException("当前 Codex 没有开启皮肤连接。请先从 Codex 的“文件→退出”彻底退出，再点“启动 / 连接 Codex”。聊天会保留。");
+                    throw new InvalidOperationException("当前 Codex 尚未开启主题连接。请从 Codex“文件 → 退出”彻底退出，再通过桌面“Codex（动态皮肤）”入口打开。聊天会保留。");
                 await LaunchCodexAsync();
                 for (int attempt = 0; attempt < 40 && targets.Count == 0; attempt++)
                 {
@@ -99,6 +106,14 @@ internal sealed class SkinController : IAsyncDisposable
                         if (state.TryGetProperty("present", out var present) && present.ValueKind == JsonValueKind.True) continue;
                     }
                 }
+                if (!session.BindingReady)
+                {
+                    Session active = session;
+                    session.Client.BindingCalled += value => _ = TransferMediaAsync(active, value);
+                    await session.Client.SendAsync("Runtime.enable");
+                    await session.Client.SendAsync("Runtime.addBinding", new { name = "__codexDreamRead" });
+                    session.BindingReady = true;
+                }
                 if (session.ScriptId is not null)
                 {
                     try { await session.Client.SendAsync("Page.removeScriptToEvaluateOnNewDocument", new { identifier = session.ScriptId }); }
@@ -139,6 +154,61 @@ internal sealed class SkinController : IAsyncDisposable
         catch (Exception ex) when (ex is IOException or HttpRequestException or TaskCanceledException or JsonException) { return []; }
     }
 
+    internal async Task<bool> IsAvailableAsync() => (await ReadTargetsAsync()).Count > 0;
+
+    internal async Task DisconnectAsync()
+    {
+        await gate.WaitAsync();
+        try
+        {
+            foreach (var session in sessions.Values) await session.Client.DisposeAsync();
+            sessions.Clear(); recovered = false;
+        }
+        finally { gate.Release(); }
+    }
+
+    private async Task TransferMediaAsync(Session session, JsonElement call)
+    {
+        string? id = null; int context = 0;
+        byte[]? buffer = null; bool acquired = false;
+        try
+        {
+            if (call.GetProperty("name").GetString() != "__codexDreamRead") return;
+            string? payload = call.GetProperty("payload").GetString();
+            if (payload is null || payload.Length > 512) return;
+            using var request = JsonDocument.Parse(payload);
+            string source = request.RootElement.GetProperty("source").GetString() ?? "";
+            id = request.RootElement.GetProperty("id").GetString();
+            if (id is null || id.Length > 80) return;
+            context = call.GetProperty("executionContextId").GetInt32();
+            var entry = MediaSource?.Find(source);
+            if (entry is null) return;
+            await session.TransferGate.WaitAsync(); acquired = true;
+            // 16 KB 原始块使 Base64 字符串与 JSON 缓冲均小于大对象堆阈值。
+            buffer = ArrayPool<byte>.Shared.Rent(16384);
+            await using var file = new FileStream(entry.Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
+                16384, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            if (file.Length > 100L * 1024 * 1024) throw new IOException("素材超过 100 MB。");
+            while (session.Client.Connected)
+            {
+                int count = await file.ReadAsync(buffer.AsMemory(0, 16384));
+                string chunk = count == 0 ? "" : Convert.ToBase64String(buffer, 0, count);
+                string expression = "window.__codexDreamTransfer?.accept(" + JsonSerializer.Serialize(id) + "," +
+                    JsonSerializer.Serialize(chunk) + "," + JsonSerializer.Serialize(entry.Mime) + "," + (count == 0 ? "true" : "false") + ")";
+                var result = await session.Client.SendAsync("Runtime.evaluate", new { expression, contextId = context, returnByValue = true });
+                if (count == 0 || result.TryGetProperty("exceptionDetails", out _) ||
+                    !result.GetProperty("result").TryGetProperty("value", out var accepted) || accepted.ValueKind != JsonValueKind.True) break;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or OperationCanceledException or JsonException or KeyNotFoundException)
+        {
+            if (id is not null && session.Client.Connected)
+                try { await session.Client.SendAsync("Runtime.evaluate", new {contextId = context,
+                    expression = "window.__codexDreamTransfer?.fail(" + JsonSerializer.Serialize(id) + ",\"素材传输中断，请重新应用主题\")"}); } catch (Exception) { }
+        }
+        finally { if (buffer is not null) ArrayPool<byte>.Shared.Return(buffer); if (acquired) session.TransferGate.Release(); }
+    }
+
     private static bool IsCodexRunning()
     {
         foreach (Process process in Process.GetProcessesByName("ChatGPT"))
@@ -156,7 +226,24 @@ internal sealed class SkinController : IAsyncDisposable
         return false;
     }
 
-    private async Task LaunchCodexAsync()
+    internal async Task LaunchCodexAsync(bool debugging = true)
+    {
+        string cache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CodexDreamSkin", "codex-install.txt");
+        string executable = File.Exists(cache) ? (await File.ReadAllTextAsync(cache)).Trim() : "";
+        if (!File.Exists(executable)) executable = await LocateCodexAsync();
+        Directory.CreateDirectory(Path.GetDirectoryName(cache)!);
+        if (!File.Exists(cache) || (await File.ReadAllTextAsync(cache)).Trim() != executable) await File.WriteAllTextAsync(cache, executable);
+        var launch = new ProcessStartInfo(executable) { UseShellExecute = false };
+        if (debugging)
+        {
+            launch.ArgumentList.Add("--remote-debugging-port=0");
+            launch.ArgumentList.Add("--remote-debugging-address=127.0.0.1");
+        }
+        launch.ArgumentList.Add("--user-data-dir=" + profileDirectory);
+        using var launched = Process.Start(launch);
+    }
+
+    private static async Task<string> LocateCodexAsync()
     {
         var locate = new ProcessStartInfo("powershell.exe")
         {
@@ -169,12 +256,7 @@ internal sealed class SkinController : IAsyncDisposable
         await process.WaitForExitAsync();
         string executable = Path.Combine(installation, "app", "ChatGPT.exe");
         if (!File.Exists(executable)) throw new InvalidOperationException("没有找到 Microsoft Store 版 Codex。请先安装 Codex。");
-        var launch = new ProcessStartInfo(executable) { UseShellExecute = false };
-        launch.ArgumentList.Add("--remote-debugging-port=0");
-        launch.ArgumentList.Add("--remote-debugging-address=127.0.0.1");
-        launch.ArgumentList.Add("--user-data-dir=" + profileDirectory);
-        // 仅本次启动开启本机连接，不改系统环境变量或安装文件。
-        using var launched = Process.Start(launch);
+        return executable;
     }
 
     internal async Task RestoreAsync()
@@ -191,6 +273,7 @@ internal sealed class SkinController : IAsyncDisposable
             foreach (var pair in sessions)
             {
                 var session = pair.Value;
+                if (!session.Client.Connected) { await session.Client.DisposeAsync(); continue; }
                 try
                 {
                     if (session.ScriptId is not null)
@@ -208,7 +291,7 @@ internal sealed class SkinController : IAsyncDisposable
                 await session.Client.DisposeAsync();
             }
             sessions.Clear();
-            if (failed.Count == 0) File.Delete(journalPath);
+            if (failed.Count == 0) await WriteJournalAsync([]);
             else
             {
                 await WriteJournalAsync(failed);
@@ -221,20 +304,21 @@ internal sealed class SkinController : IAsyncDisposable
     private Task SaveJournalAsync() => WriteJournalAsync(sessions.Where(x => x.Value.ScriptId is not null)
         .Select(x => new JournalEntry(x.Key, x.Value.Address, x.Value.Port, x.Value.ScriptId!)).ToList());
 
-    private async Task WriteJournalAsync(List<JournalEntry> entries)
+    private Task WriteJournalAsync(List<JournalEntry> entries)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(journalPath)!);
-        string temporary = journalPath + ".tmp";
-        await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(entries));
-        File.Move(temporary, journalPath, true);
+        using var key = Registry.CurrentUser.CreateSubKey(journalRegistryPath);
+        key.SetValue("Journal", JsonSerializer.Serialize(entries), RegistryValueKind.String);
+        return Task.CompletedTask;
     }
 
     private async Task AdoptExistingAsync(List<Target> targets)
     {
-        if (!File.Exists(journalPath)) return;
+        using var key = Registry.CurrentUser.OpenSubKey(journalRegistryPath);
+        string? saved = key?.GetValue("Journal") as string;
+        if (saved is null && !File.Exists(journalPath)) return;
         List<JournalEntry> entries;
-        try { entries = JsonSerializer.Deserialize<List<JournalEntry>>(await File.ReadAllTextAsync(journalPath)) ?? []; }
-        catch (JsonException) { File.Delete(journalPath); return; }
+        try { entries = JsonSerializer.Deserialize<List<JournalEntry>>(saved ?? await File.ReadAllTextAsync(journalPath)) ?? []; }
+        catch (JsonException) { await WriteJournalAsync([]); return; }
         foreach (var entry in entries)
         {
             if (!targets.Any(t => t.id == entry.TargetId && t.webSocketDebuggerUrl == entry.Address) || entry.Port != port) continue;

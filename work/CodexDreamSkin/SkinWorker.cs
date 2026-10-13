@@ -2,7 +2,6 @@ using System.IO;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
-using System.Windows;
 
 namespace CodexDreamSkin;
 
@@ -12,6 +11,11 @@ internal sealed class SkinWorker(string? profileOverride)
     private readonly ThemeSettingsStore store = new(profileOverride);
     private readonly SemaphoreSlim operationGate = new(1, 1);
     private readonly CancellationTokenSource lifetime = new();
+    private readonly MediaStore mediaStore = new();
+    private readonly SemaphoreSlim wake = new(0, 1);
+    private FileSystemWatcher? watcher;
+    private bool connected;
+    private string? lastPollError;
     private string? cachedMediaId;
     private string cachedSource = "";
     private string cachedKind = "art";
@@ -20,6 +24,12 @@ internal sealed class SkinWorker(string? profileOverride)
     internal async Task RunAsync()
     {
         SkinLog.Write("皮肤守护启动：" + WorkerIdentity.PipeName(profileOverride));
+        controller.MediaSource = mediaStore;
+        Directory.CreateDirectory(WorkerIdentity.ProfileDirectory(profileOverride));
+        watcher = new FileSystemWatcher(WorkerIdentity.ProfileDirectory(profileOverride), "DevToolsActivePort")
+        { NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite, EnableRaisingEvents = true };
+        watcher.Created += (_, _) => Wake(); watcher.Changed += (_, _) => Wake(); watcher.Renamed += (_, _) => Wake();
+        Wake();
         Task poller = PollAsync();
         try
         {
@@ -44,13 +54,14 @@ internal sealed class SkinWorker(string? profileOverride)
                         try
                         {
                             await controller.RestoreAsync();
-                            var settings = store.Load(); settings.Enabled = false; store.Save(settings);
+                            var settings = store.Load(); settings.Enabled = false; store.Save(settings, true);
+                            await StartupIntegration.UpdateAsync(settings, profileOverride);
                             response = new WorkerResponse(true, 0, "效果已关闭。");
                         }
                         finally { operationGate.Release(); }
                     }
                     else if (request.Command == "version")
-                        response = new WorkerResponse(true, 0, "中央人物强动效 v4", 4);
+                        response = new WorkerResponse(true, 0, "轻量自动恢复 v5", 5);
                     else if (request.Command == "apply")
                         response = new WorkerResponse(true, await ApplyAsync(request.AllowLaunch, true), "皮肤已应用。");
                     else response = new WorkerResponse(false, 0, "不支持的后台命令。");
@@ -69,8 +80,10 @@ internal sealed class SkinWorker(string? profileOverride)
         finally
         {
             lifetime.Cancel();
+            watcher?.Dispose();
             try { await poller; } catch (OperationCanceledException) { }
-            await controller.DisposeAsync(); operationGate.Dispose(); lifetime.Dispose();
+            await controller.DisposeAsync(); mediaStore.Clear();
+            operationGate.Dispose(); wake.Dispose(); lifetime.Dispose();
             SkinLog.Write("皮肤守护已停止。");
         }
     }
@@ -79,10 +92,13 @@ internal sealed class SkinWorker(string? profileOverride)
     {
         while (!lifetime.IsCancellationRequested)
         {
-            await Task.Delay(TimeSpan.FromSeconds(3), lifetime.Token);
+            await wake.WaitAsync(TimeSpan.FromSeconds(connected ? 3 : 8), lifetime.Token);
             if (!store.Load().Enabled) continue;
-            try { await ApplyAsync(false, false); }
-            catch (Exception) { /* 客户端未运行或暂时断线时保持安静，下一轮继续连接。 */ }
+            try { await ApplyAsync(false, false); lastPollError = null; }
+            catch (Exception ex)
+            {
+                if (lastPollError != ex.Message) { lastPollError = ex.Message; SkinLog.Write("自动恢复等待：" + ex.Message); }
+            }
         }
     }
 
@@ -93,17 +109,32 @@ internal sealed class SkinWorker(string? profileOverride)
         {
             var settings = store.Load();
             if (!enable && !settings.Enabled) return 0;
-            await LoadMediaAsync(settings);
+            if (enable)
+            {
+                settings.Enabled = true; store.Save(settings, true);
+                await StartupIntegration.UpdateAsync(settings, profileOverride);
+            }
+            if (!allowLaunch && !await controller.IsAvailableAsync())
+            {
+                if (connected)
+                {
+                    await controller.DisconnectAsync(); connected = false; cachedMediaId = null; mediaStore.Clear();
+                    // 仅在客户端退出时释放上一轮调试连接的临时分配，不周期性裁剪工作集。
+                    GC.Collect(GC.MaxGeneration, GCCollectionMode.Optimized, false, false);
+                }
+                return 0;
+            }
+            LoadMedia(settings);
             var config = new SkinConfig(cachedKind, cachedSource, cachedMediaId!, settings.Panel / 100d,
                 .04, cachedEffect, settings.Motion / 100d);
             int windows = await controller.ApplyAsync(config, allowLaunch);
-            if (enable && !settings.Enabled) { settings.Enabled = true; store.Save(settings); }
+            connected = true;
             return windows;
         }
         finally { operationGate.Release(); }
     }
 
-    private async Task LoadMediaAsync(ThemeSettings settings)
+    private void LoadMedia(ThemeSettings settings)
     {
         if (settings.PresetId == "custom")
         {
@@ -116,20 +147,25 @@ internal sealed class SkinWorker(string? profileOverride)
                 ".mp4" => "video/mp4", ".webm" => "video/webm", ".jpg" or ".jpeg" => "image/jpeg",
                 ".gif" => "image/gif", ".webp" => "image/webp", ".bmp" => "image/bmp", _ => "image/png"
             };
-            cachedSource = $"data:{mime};base64," + Convert.ToBase64String(await File.ReadAllBytesAsync(file.FullName));
+            cachedSource = mediaStore.SetMedia(file.FullName, mime);
             cachedKind = mime.StartsWith("video/") ? "video" : "image"; cachedEffect = "none"; cachedMediaId = id;
             return;
         }
-        var preset = ThemeCatalog.Definitions.FirstOrDefault(x => x.Id == settings.PresetId) ?? ThemeCatalog.Definitions[0];
+        var preset = ThemeDefinitions.Definitions.FirstOrDefault(x => x.Id == settings.PresetId) ?? ThemeDefinitions.Definitions[0];
         if (cachedMediaId == preset.Id) return;
         cachedKind = preset.Id == "aurora" ? "aurora" : "art"; cachedEffect = preset.Effect;
         if (cachedKind == "aurora") cachedSource = "";
         else
         {
-            using var stream = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/" + preset.File))!.Stream;
-            using var memory = new MemoryStream(); await stream.CopyToAsync(memory);
-            cachedSource = "data:image/png;base64," + Convert.ToBase64String(memory.ToArray());
+            string path = Path.Combine(AppContext.BaseDirectory, "Themes", preset.File);
+            if (!File.Exists(path)) throw new FileNotFoundException("缺少主题素材，请使用完整 v5 软件包。", path);
+            cachedSource = mediaStore.SetMedia(path, "image/png");
         }
         cachedMediaId = preset.Id;
+    }
+
+    private void Wake()
+    {
+        try { if (wake.CurrentCount == 0) wake.Release(); } catch (Exception ex) when (ex is SemaphoreFullException or ObjectDisposedException) { }
     }
 }

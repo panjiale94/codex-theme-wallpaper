@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="work/CodexDreamSkin/CodexDreamSkin.csproj" />
+  <Project Path="work/CodexDreamSkin.Worker/CodexDreamSkin.Worker.csproj" />
 </Solution>

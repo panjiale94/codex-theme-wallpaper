@@ -3,6 +3,10 @@
 **/obj/
 **/node_modules/
 work/cdp-probe-profile/
+work/v5-test-profile/
+work/v5-*.json
+work/v5-*.txt
+outputs/CodexDreamSkin-v5/Themes/
 work/preview-frames/
 work/probe-pid.txt
 work/publish/

@@ -1,7 +1,7 @@
 (function () {
   if (location.protocol !== 'app:' || location.search.includes('avatar-overlay')) return;
   const key = '__codexDreamSkin';
-  if (window[key]?.version === 4) return;
+  if (window[key]?.version === 5) return;
   if (window[key]) window[key].restore();
   let originalTheme;
   let observer;
@@ -11,6 +11,25 @@
   let mediaAbort;
   let stopEffects;
   let effectKey;
+  let resolvedToken, resolvedUrl, loadingToken;
+  const transfers = new Map();
+  window.__codexDreamTransfer = {
+    load(source) {
+      return new Promise((resolve,reject) => {
+        const id=Date.now().toString(36)+Math.random().toString(36).slice(2);
+        const timeout=setTimeout(()=>this.fail(id,'素材加载超时'),90000);
+        transfers.set(id,{parts:[],resolve,reject,timeout});
+        window.__codexDreamRead(JSON.stringify({source,id}));
+      });
+    },
+    accept(id, encoded, mime, done) {
+      const transfer=transfers.get(id);if(!transfer)return false;
+      if(encoded){const text=atob(encoded);const bytes=new Uint8Array(text.length);for(let i=0;i<text.length;i++)bytes[i]=text.charCodeAt(i);transfer.parts.push(bytes);}
+      if(done){clearTimeout(transfer.timeout);transfers.delete(id);const url=URL.createObjectURL(new Blob(transfer.parts,{type:mime}));transfer.parts.length=0;transfer.resolve(url);}
+      return true;
+    },
+    fail(id,message){const transfer=transfers.get(id);if(!transfer)return;clearTimeout(transfer.timeout);transfers.delete(id);transfer.parts.length=0;transfer.reject(Error(message));}
+  };
   const css = `
 html[data-dream-skin] { color-scheme: dark; }
 html[data-dream-skin], html[data-dream-skin] body { background: #10151e !important; }
@@ -51,6 +70,21 @@ html[data-dream-skin] [class*='_ComposerLayoutRoot_'] { background:rgba(15,22,34
       document.documentElement.setAttribute('data-theme', 'dark');
   }
   function apply(next) {
+    if(next.source?.startsWith('dream-media:')) {
+      if(resolvedToken===next.source && resolvedUrl) return apply({...next,source:resolvedUrl});
+      config=next;
+      if(loadingToken!==next.source) {
+        for(const id of transfers.keys())window.__codexDreamTransfer.fail(id,'主题已切换');
+        loadingToken=next.source;const token=next.source;
+        window.__codexDreamTransfer.load(token).then(url=>{
+          if(!config || config.source!==token){URL.revokeObjectURL(url);return;}
+          if(resolvedUrl)URL.revokeObjectURL(resolvedUrl);
+          resolvedToken=token;resolvedUrl=url;loadingToken=null;
+          apply({...config,source:url});
+        }).catch(()=>{if(loadingToken===token){if(host)host.dataset.error='transfer';loadingToken=null;}});
+      }
+      return {pending:true};
+    }
     config = next;
     if (!document.body || !document.getElementById('root')) {
       document.addEventListener('DOMContentLoaded', () => apply(next), {once:true});
@@ -68,7 +102,8 @@ html[data-dream-skin] [class*='_ComposerLayoutRoot_'] { background:rgba(15,22,34
     if (!host) {
       host=document.createElement('div'); host.id='codex-dream-background'; document.body.prepend(host);
     }
-    if (host.dataset.source !== next.mediaId) {
+    host.dataset.version='5';
+    if (host.dataset.source !== next.mediaId || host.dataset.mediaUrl !== next.source) {
       stopEffects?.();stopEffects=null;effectKey=null;
       mediaAbort?.abort(); mediaAbort=new AbortController();
       delete host.dataset.error;
@@ -82,10 +117,11 @@ html[data-dream-skin] [class*='_ComposerLayoutRoot_'] { background:rgba(15,22,34
         video.addEventListener('error',()=>host.dataset.error=String(video.error?.code||'decode'),{signal:mediaAbort.signal});
         media.append(video); video.play().catch(()=>{});
       } else {
-        const img=document.createElement('img'); img.src=next.source; img.className=next.kind==='art'?'dream-art':'';
+        const img=document.createElement('img'); img.crossOrigin='anonymous'; img.src=next.source; img.className=next.kind==='art'?'dream-art':'';
         img.addEventListener('error',()=>host.dataset.error='image',{signal:mediaAbort.signal});media.append(img);
       }
       host.dataset.source = next.mediaId;
+      host.dataset.mediaUrl = next.source;
     }
     const motion=Math.max(0,Math.min(1,next.motion??.7));
     host.style.setProperty('--dream-motion',motion);host.toggleAttribute('data-motion-zero',motion===0);
@@ -101,6 +137,7 @@ html[data-dream-skin] [class*='_ComposerLayoutRoot_'] { background:rgba(15,22,34
   }
   function restore() {
     config = null;
+    for(const id of transfers.keys())window.__codexDreamTransfer.fail(id,'效果已关闭');
     stopEffects?.();stopEffects=null;
     observer?.disconnect(); observer=null;
     mediaAbort?.abort();mediaAbort=null;
@@ -112,8 +149,10 @@ html[data-dream-skin] [class*='_ComposerLayoutRoot_'] { background:rgba(15,22,34
       else document.documentElement.setAttribute('data-theme',originalTheme);
     }
     originalTheme=undefined;
+    if(resolvedUrl)URL.revokeObjectURL(resolvedUrl);resolvedUrl=null;resolvedToken=null;loadingToken=null;
+    delete window.__codexDreamTransfer;
     delete window[key];
     return {restored:true};
   }
-  window[key]={apply,restore,version:4};
+  window[key]={apply,restore,version:5};
 })();

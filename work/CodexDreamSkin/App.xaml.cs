@@ -27,15 +27,16 @@ public partial class App : Application
             return;
         }
         base.OnStartup(e);
-        if (background) RunWorker(profile);
+        if (background)
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(System.IO.Path.Combine(AppContext.BaseDirectory, "CodexDreamSkin.Worker.exe"))
+            { UseShellExecute = false, CreateNoWindow = true, WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden };
+            start.ArgumentList.Add("--background");
+            if (profile is not null) start.ArgumentList.Add("--profile-dir=" + profile);
+            using var worker = System.Diagnostics.Process.Start(start);
+            Shutdown();
+        }
         else { MainWindow = new MainWindow(); MainWindow.Show(); }
-    }
-
-    private async void RunWorker(string? profile)
-    {
-        try { await new SkinWorker(profile).RunAsync(); }
-        catch (Exception ex) { SkinLog.Write("后台退出：" + ex); }
-        finally { Dispatcher.Invoke(Shutdown); }
     }
 
     protected override void OnExit(ExitEventArgs e)
