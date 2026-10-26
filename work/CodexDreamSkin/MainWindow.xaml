@@ -1,7 +1,7 @@
 <Window x:Class="CodexDreamSkin.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Codex 动态皮肤 · 普通启动自动恢复 v6" Width="1050" Height="835" MinWidth="940" MinHeight="780"
+        Title="Codex 动态皮肤 · 开机恢复与自动修复 v7" Width="1050" Height="835" MinWidth="940" MinHeight="780"
         WindowStartupLocation="CenterScreen" Background="#090F1C" Foreground="#E8EEF8">
     <Window.Resources>
         <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>

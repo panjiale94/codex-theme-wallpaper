@@ -9,6 +9,10 @@ work/v5-*.txt
 work/v6-test-profile/
 work/v6-*.json
 work/v6-*.txt
+work/v7-test-profile/
+work/v7-*.json
+work/v7-*.txt
+outputs/CodexDreamSkin-v7/Themes/
 outputs/CodexDreamSkin-v6/Themes/
 outputs/CodexDreamSkin-v5/Themes/
 work/preview-frames/

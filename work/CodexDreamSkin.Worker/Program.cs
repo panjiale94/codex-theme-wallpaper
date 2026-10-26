@@ -9,6 +9,11 @@ internal static class Program
     private static int Main(string[] args)
     {
         string? profile = args.FirstOrDefault(x => x.StartsWith("--profile-dir="))?[14..];
+        if (args.Contains("--repair-startup"))
+        {
+            try { StartupIntegration.UpdateAsync(new ThemeSettingsStore(profile).Load(), profile).GetAwaiter().GetResult(); return 0; }
+            catch (Exception ex) { SkinLog.Write("修复登录启动失败：" + ex); return 1; }
+        }
         if (args.Contains("--launch"))
         {
             try

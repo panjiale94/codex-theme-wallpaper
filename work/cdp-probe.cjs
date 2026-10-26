@@ -20,6 +20,10 @@ if(process.argv[2]==='close-browser') {
 } else if(process.argv[2]==='eval'){
  console.log(JSON.stringify(await send('Runtime.evaluate',{expression:fs.readFileSync(process.argv[3],'utf8'),returnByValue:true,awaitPromise:true}),null,2));
 } else if(process.argv[2]==='front') {
+ try {
+  const window=await send('Browser.getWindowForTarget',{targetId:target.id});
+  await send('Browser.setWindowBounds',{windowId:window.windowId,bounds:{windowState:'normal'}});
+ } catch { /* Electron 的部分窗口不暴露 Browser 窗口控制域。 */ }
  await send('Page.bringToFront'); console.log('Brought test Codex to front');
 } else if(process.argv[2]==='reload') {
  await send('Page.reload'); console.log('Reloaded test Codex');

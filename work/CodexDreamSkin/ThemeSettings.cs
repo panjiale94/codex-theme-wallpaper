@@ -20,11 +20,13 @@ internal sealed class ThemeSettingsStore
 {
     private readonly string path;
     private readonly string registryPath;
+    private readonly string sharedPath;
     internal ThemeSettingsStore(string? profileOverride)
     {
         string profile = WorkerIdentity.ProfileDirectory(profileOverride);
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(profile.ToUpperInvariant())))[..16];
         registryPath = @"Software\CodexDreamSkin\Profiles\" + key;
+        sharedPath = ProfileStorage.PathFor(key, "settings");
         path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "CodexDreamSkin", "settings-" + key + ".json");
     }
@@ -35,6 +37,12 @@ internal sealed class ThemeSettingsStore
         {
             using var key = Registry.CurrentUser.OpenSubKey(registryPath);
             string? json = key?.GetValue("Settings") as string;
+            if (File.Exists(sharedPath))
+            {
+                using var shared = new FileStream(sharedPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var reader = new StreamReader(shared);
+                json = reader.ReadToEnd();
+            }
             ThemeSettings settings;
             if (json is not null) settings = JsonSerializer.Deserialize<ThemeSettings>(json) ?? new ThemeSettings();
             else
@@ -52,9 +60,11 @@ internal sealed class ThemeSettingsStore
 
     internal void Save(ThemeSettings settings, bool durable = false)
     {
-        // 单个注册表值原子替换，避开 EFS 目录中重命名覆盖失败造成的配置丢失。
+        string json = JsonSerializer.Serialize(settings);
+        // 共享主配置位于已验证可原子替换的 ProgramData 私有目录；注册表保留兼容镜像。
+        ProfileStorage.Write(sharedPath, json, durable);
         using var key = Registry.CurrentUser.CreateSubKey(registryPath);
-        key.SetValue("Settings", JsonSerializer.Serialize(settings), RegistryValueKind.String);
+        key.SetValue("Settings", json, RegistryValueKind.String);
         if (durable) key.Flush();
     }
 }

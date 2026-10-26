@@ -23,6 +23,7 @@ internal sealed class SkinController : IAsyncDisposable
     private readonly bool isAlternateProfile;
     private readonly string journalPath;
     private readonly string journalRegistryPath;
+    private readonly string sharedJournalPath;
     private bool recovered;
     private int port;
     internal MediaStore? MediaSource { get; set; }
@@ -45,6 +46,7 @@ internal sealed class SkinController : IAsyncDisposable
         profileDirectory = WorkerIdentity.ProfileDirectory(profileOverride);
         string profileKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(profileDirectory.ToUpperInvariant())))[..16];
         journalRegistryPath = @"Software\CodexDreamSkin\Profiles\" + profileKey;
+        sharedJournalPath = ProfileStorage.PathFor(profileKey, "injection");
         journalPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "CodexDreamSkin", $"injection-{profileKey}.json");
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("CodexDreamSkin.SkinRuntime.js")!;
@@ -306,6 +308,7 @@ internal sealed class SkinController : IAsyncDisposable
 
     private Task WriteJournalAsync(List<JournalEntry> entries)
     {
+        ProfileStorage.Write(sharedJournalPath, JsonSerializer.Serialize(entries));
         using var key = Registry.CurrentUser.CreateSubKey(journalRegistryPath);
         key.SetValue("Journal", JsonSerializer.Serialize(entries), RegistryValueKind.String);
         return Task.CompletedTask;
@@ -314,7 +317,7 @@ internal sealed class SkinController : IAsyncDisposable
     private async Task AdoptExistingAsync(List<Target> targets)
     {
         using var key = Registry.CurrentUser.OpenSubKey(journalRegistryPath);
-        string? saved = key?.GetValue("Journal") as string;
+        string? saved = File.Exists(sharedJournalPath) ? await File.ReadAllTextAsync(sharedJournalPath) : key?.GetValue("Journal") as string;
         if (saved is null && !File.Exists(journalPath)) return;
         List<JournalEntry> entries;
         try { entries = JsonSerializer.Deserialize<List<JournalEntry>>(saved ?? await File.ReadAllTextAsync(journalPath)) ?? []; }
